@@ -1,0 +1,18 @@
+[Unit]
+Description=osqueryd
+After=network.target
+
+[Service]
+# Config plugin configuration
+Environment=OSQUERY_S3_CONFIG_BUCKET_NAME=osquery-s3-config-test
+Environment=OSQUERY_S3_CONFIG_BUCKET_REGION=us-east-1
+Environment=OSQUERY_S3_CONFIG_PATH=osquery-example.conf
+Environment=AWS_PROFILE=default
+
+ExecStart=/usr/bin/osqueryd \
+		--extensions_autoload=/etc/osquery/extensions.load \
+		--config_plugin=s3 \
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

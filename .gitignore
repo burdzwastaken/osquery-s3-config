@@ -1,0 +1,3 @@
+vendor/
+build/
+osquery-s3-config.ext
