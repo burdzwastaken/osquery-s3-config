@@ -1,6 +1,6 @@
 # osquery-s3-config
 
-An [osquery](https://osquery.io) config plugin to read from a configuration file stored in an [AWS s3](https://aws.amazon.com/s3/) bucket.
+A [osquery](https://osquery.io) config plugin to read from a configuration file stored in an [AWS s3](https://aws.amazon.com/s3/) bucket.
 
 ## Building
 
