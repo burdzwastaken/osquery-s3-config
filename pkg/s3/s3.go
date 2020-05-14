@@ -40,10 +40,10 @@ func (p *Plugin) GenerateConfigs(ctx context.Context) (map[string]string, error)
 	if err != nil {
 		errors.Wrap(err, "get config s3")
 	}
+	defer result.Body.Close()
 
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(result.Body)
-	config := buf.String()
 
-	return map[string]string{"s3": config}, nil
+	return map[string]string{"s3": buf.String()}, nil
 }
