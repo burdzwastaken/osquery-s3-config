@@ -1,14 +1,13 @@
-.PHONY: build env osqueryd osqueryi deps
+.PHONY: all build osqueryd osqueryi vendor tidy clean
+GOCMD=go
+GOBUILD=$(GOCMD) build
+GOMOD=$(GOCMD) mod
 
 all: build
 
-deps:
-	go get -u github.com/golang/dep/cmd/dep
-	dep ensure -vendor-only
-
 build:
 	echo "$(shell pwd)/build/s3-config-extension.ext" > /tmp/extensions.load
-	go build -i -o build/s3-config-extension.ext .
+	$(GOBUILD) -i -o build/s3-config-extension.ext .
 
 osqueryd: build
 	osqueryd \
@@ -21,6 +20,12 @@ osqueryd: build
 
 osqueryi: build
 	osqueryi --extension=./build/s3-config-extension.ext
+
+vendor:
+	$(GOMOD) vendor
+
+tidy:
+	$(GOMOD) tidy
 
 clean:
 	rm -rf /tmp/extensions.load
