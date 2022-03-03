@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/burdzwastaken/osquery-s3-config/pkg/s3"
-	osquery "github.com/kolide/osquery-go"
+	osquery "github.com/osquery/osquery-go"
 )
 
 func main() {
