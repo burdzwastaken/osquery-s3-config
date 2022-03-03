@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/kolide/osquery-go/plugin/config"
+	"github.com/osquery/osquery-go/plugin/config"
 )
 
 const (
