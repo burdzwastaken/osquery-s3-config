@@ -7,7 +7,7 @@ all: build
 
 build:
 	echo "$(shell pwd)/build/s3-config-extension.ext" > /tmp/extensions.load
-	$(GOBUILD) -i -o build/s3-config-extension.ext .
+	$(GOBUILD) -o build/s3-config-extension.ext .
 
 osqueryd: build
 	osqueryd \
