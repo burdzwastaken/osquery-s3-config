@@ -25,9 +25,10 @@ const (
 )
 
 type Plugin struct {
-	bucketName string
-	configPath string
-	client     *s3.S3
+	bucketName   string
+	bucketRegion string
+	configPath   string
+	client       *s3.S3
 }
 
 func exitErrorf(msg string, args ...any) {
@@ -52,12 +53,20 @@ func New() *config.Plugin {
 	bucketRegion := getEnv(bucketRegionEnvVar, defaultBucketRegion)
 	configPath := getEnv(bucketConfigPathEnvVar, defaultConfigPath)
 
-	sess, err := session.NewSession(&aws.Config{Region: aws.String(bucketRegion)})
+	sess, err := session.NewSession(&aws.Config{
+		Region: aws.String(bucketRegion),
+	})
 	if err != nil {
 		exitErrorf("error creating AWS session: %v", err)
 	}
+
 	client := s3.New(sess)
-	plugin := &Plugin{client: client, bucketName: bucketName, configPath: configPath}
+	plugin := &Plugin{
+		client:       client,
+		bucketName:   bucketName,
+		bucketRegion: bucketRegion,
+		configPath:   configPath,
+	}
 	return config.NewPlugin(pluginName, plugin.GenerateConfigs)
 }
 
@@ -66,6 +75,7 @@ func (p *Plugin) GenerateConfigs(ctx context.Context) (map[string]string, error)
 		Bucket: aws.String(p.bucketName),
 		Key:    aws.String(p.configPath),
 	}
+
 	result, err := p.client.GetObjectWithContext(ctx, input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
@@ -74,6 +84,8 @@ func (p *Plugin) GenerateConfigs(ctx context.Context) (map[string]string, error)
 				return nil, fmt.Errorf("bucket %s does not exist", p.bucketName)
 			case s3.ErrCodeNoSuchKey:
 				return nil, fmt.Errorf("object with key %s does not exist in bucket %s", p.configPath, p.bucketName)
+			default:
+				return nil, fmt.Errorf("AWS S3 error: %s - %s", aerr.Code(), aerr.Message())
 			}
 		}
 		return nil, fmt.Errorf("error fetching S3 object: %w", err)
@@ -84,5 +96,6 @@ func (p *Plugin) GenerateConfigs(ctx context.Context) (map[string]string, error)
 	if err != nil {
 		return nil, fmt.Errorf("reading S3 object body: %w", err)
 	}
+
 	return map[string]string{pluginName: string(data)}, nil
 }
