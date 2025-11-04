@@ -1,13 +1,19 @@
-.PHONY: all build osqueryd osqueryi vendor tidy clean
+.PHONY: all build osqueryd osqueryi vendor tidy clean test
 GOCMD=go
 GOBUILD=$(GOCMD) build
 GOMOD=$(GOCMD) mod
+GOTEST=$(GOCMD) test
+WORKDIR=$(shell pwd)
+TESTARGS?=./...
 
-all: build
+all: test build
 
 build:
 	echo "$(shell pwd)/build/s3-config-extension.ext" > /tmp/extensions.load
 	$(GOBUILD) -o build/s3-config-extension.ext .
+
+test:
+	$(GOTEST) $(TESTARGS)
 
 osqueryd: build
 	osqueryd \
