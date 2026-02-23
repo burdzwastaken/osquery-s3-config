@@ -1,71 +1,118 @@
 package s3
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"io"
-	"net/http"
-	"strings"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/awstesting/unit"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	smithy "github.com/aws/smithy-go"
 )
 
+type mockS3Client struct {
+	output *s3.GetObjectOutput
+	err    error
+}
+
+func (m *mockS3Client) GetObject(_ context.Context, _ *s3.GetObjectInput, _ ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+	return m.output, m.err
+}
+
 func TestGenerateConfigsSuccess(t *testing.T) {
-	svc := s3.New(unit.Session)
-	svc.Handlers.Send.Clear()
-	const payload = `{"schedule": {"foo": "bar"}}`
-	svc.Handlers.Send.PushBack(func(r *request.Request) {
-		r.HTTPResponse = &http.Response{
-			StatusCode: 200,
-			Body:       io.NopCloser(strings.NewReader(payload)),
-			Header:     http.Header{},
-		}
-		out := r.Data.(*s3.GetObjectOutput)
-		out.Body = io.NopCloser(strings.NewReader(payload))
-	})
-
-	plugin := &Plugin{
-		client:     svc,
-		bucketName: "bucket",
-		configPath: "path",
+	payload := `{"options":{}}`
+	mock := &mockS3Client{
+		output: &s3.GetObjectOutput{
+			Body: io.NopCloser(bytes.NewBufferString(payload)),
+		},
 	}
 
-	got, err := plugin.GenerateConfigs(context.Background())
+	p := &Plugin{
+		client:     mock,
+		bucketName: "test-bucket",
+		configPath: "osquery.conf",
+	}
+
+	configs, err := p.GenerateConfigs(context.Background())
 	if err != nil {
-		t.Fatalf("GenerateConfigs returned error: %v", err)
+		t.Fatalf("expected no error, got %v", err)
 	}
-	if got[pluginName] != payload {
-		t.Fatalf("config mismatch: got %q, want %q", got[pluginName], payload)
+
+	got, ok := configs[pluginName]
+	if !ok {
+		t.Fatalf("expected key %q in configs", pluginName)
+	}
+	if got != payload {
+		t.Errorf("expected %q, got %q", payload, got)
 	}
 }
 
 func TestGenerateConfigsNoSuchKey(t *testing.T) {
-	svc := s3.New(unit.Session)
-	svc.Handlers.Send.Clear()
-	svc.Handlers.Send.PushBack(func(r *request.Request) {
-		r.HTTPResponse = &http.Response{
-			StatusCode: 404,
-			Body:       io.NopCloser(strings.NewReader("not found")),
-			Header:     http.Header{},
-		}
-		r.Error = awserr.New(s3.ErrCodeNoSuchKey, "not found", nil)
-	})
-
-	plugin := &Plugin{
-		client:     svc,
-		bucketName: "bucket",
-		configPath: "path",
+	mock := &mockS3Client{
+		err: &types.NoSuchKey{
+			Message: new(string),
+		},
 	}
 
-	_, err := plugin.GenerateConfigs(context.Background())
+	p := &Plugin{
+		client:     mock,
+		bucketName: "test-bucket",
+		configPath: "osquery.conf",
+	}
+
+	_, err := p.GenerateConfigs(context.Background())
 	if err == nil {
-		t.Fatal("expected error but got nil")
+		t.Fatal("expected error, got nil")
 	}
-	want := "object with key path does not exist in bucket bucket"
-	if !strings.Contains(err.Error(), want) {
-		t.Fatalf("unexpected error: got %q, want substring %q", err.Error(), want)
+
+	expected := fmt.Sprintf("object with key %s does not exist in bucket %s", p.configPath, p.bucketName)
+	if err.Error() != expected {
+		t.Errorf("expected %q, got %q", expected, err.Error())
+	}
+}
+
+func TestGenerateConfigsNoSuchBucket(t *testing.T) {
+	mock := &mockS3Client{
+		err: &types.NoSuchBucket{
+			Message: new(string),
+		},
+	}
+
+	p := &Plugin{
+		client:     mock,
+		bucketName: "test-bucket",
+		configPath: "osquery.conf",
+	}
+
+	_, err := p.GenerateConfigs(context.Background())
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	expected := fmt.Sprintf("bucket %s does not exist", p.bucketName)
+	if err.Error() != expected {
+		t.Errorf("expected %q, got %q", expected, err.Error())
+	}
+}
+
+func TestGenerateConfigsUnknownError(t *testing.T) {
+	mock := &mockS3Client{
+		err: &smithy.GenericAPIError{
+			Code:    "InternalError",
+			Message: "something went wrong",
+		},
+	}
+
+	p := &Plugin{
+		client:     mock,
+		bucketName: "test-bucket",
+		configPath: "osquery.conf",
+	}
+
+	_, err := p.GenerateConfigs(context.Background())
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
 }

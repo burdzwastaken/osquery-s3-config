@@ -1,4 +1,4 @@
-.PHONY: all build osqueryd osqueryi vendor tidy clean test
+.PHONY: all build osqueryd osqueryi vendor tidy clean lint test
 GOCMD=go
 GOBUILD=$(GOCMD) build
 GOMOD=$(GOCMD) mod
@@ -6,7 +6,7 @@ GOTEST=$(GOCMD) test
 WORKDIR=$(shell pwd)
 TESTARGS?=./...
 
-all: test build
+all: lint test build
 
 build:
 	echo "$(shell pwd)/build/s3-config-extension.ext" > /tmp/extensions.load
@@ -37,3 +37,7 @@ clean:
 	rm -rf /tmp/extensions.load
 	rm -rf /tmp/osquery.*
 	rm -rf build
+
+lint:
+	go vet ./...
+	go tool golangci-lint run ./... -v

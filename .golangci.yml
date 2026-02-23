@@ -1,0 +1,21 @@
+version: "2"
+run:
+  tests: true
+linters:
+  default: none
+  enable:
+    - bidichk
+    - copyloopvar
+    - errcheck
+    - gocritic
+    - gosec
+    - govet
+    - ineffassign
+    - intrange
+    - misspell
+    - modernize
+    - nolintlint
+    - perfsprint
+    - staticcheck
+    - unused
+    - whitespace

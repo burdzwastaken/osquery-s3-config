@@ -2,14 +2,14 @@ package s3
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/osquery/osquery-go/plugin/config"
 )
 
@@ -24,11 +24,15 @@ const (
 	defaultConfigPath   = "osquery.conf"
 )
 
+// S3API is the subset of the S3 client API used by this plugin.
+type S3API interface {
+	GetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error)
+}
+
 type Plugin struct {
-	bucketName   string
-	bucketRegion string
-	configPath   string
-	client       *s3.S3
+	bucketName string
+	configPath string
+	client     S3API
 }
 
 func exitErrorf(msg string, args ...any) {
@@ -53,44 +57,39 @@ func New() *config.Plugin {
 	bucketRegion := getEnv(bucketRegionEnvVar, defaultBucketRegion)
 	configPath := getEnv(bucketConfigPathEnvVar, defaultConfigPath)
 
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(bucketRegion),
-	})
+	cfg, err := awsconfig.LoadDefaultConfig(context.Background(),
+		awsconfig.WithRegion(bucketRegion),
+	)
 	if err != nil {
-		exitErrorf("error creating AWS session: %v", err)
+		exitErrorf("error loading AWS config: %v", err)
 	}
 
-	client := s3.New(sess)
+	client := s3.NewFromConfig(cfg)
 	plugin := &Plugin{
-		client:       client,
-		bucketName:   bucketName,
-		bucketRegion: bucketRegion,
-		configPath:   configPath,
+		client:     client,
+		bucketName: bucketName,
+		configPath: configPath,
 	}
 	return config.NewPlugin(pluginName, plugin.GenerateConfigs)
 }
 
 func (p *Plugin) GenerateConfigs(ctx context.Context) (map[string]string, error) {
 	input := &s3.GetObjectInput{
-		Bucket: aws.String(p.bucketName),
-		Key:    aws.String(p.configPath),
+		Bucket: &p.bucketName,
+		Key:    &p.configPath,
 	}
 
-	result, err := p.client.GetObjectWithContext(ctx, input)
+	result, err := p.client.GetObject(ctx, input)
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case s3.ErrCodeNoSuchBucket:
-				return nil, fmt.Errorf("bucket %s does not exist", p.bucketName)
-			case s3.ErrCodeNoSuchKey:
-				return nil, fmt.Errorf("object with key %s does not exist in bucket %s", p.configPath, p.bucketName)
-			default:
-				return nil, fmt.Errorf("AWS S3 error: %s - %s", aerr.Code(), aerr.Message())
-			}
+		if _, ok := errors.AsType[*types.NoSuchBucket](err); ok {
+			return nil, fmt.Errorf("bucket %s does not exist", p.bucketName)
+		}
+		if _, ok := errors.AsType[*types.NoSuchKey](err); ok {
+			return nil, fmt.Errorf("object with key %s does not exist in bucket %s", p.configPath, p.bucketName)
 		}
 		return nil, fmt.Errorf("error fetching S3 object: %w", err)
 	}
-	defer result.Body.Close()
+	defer func() { _ = result.Body.Close() }()
 
 	data, err := io.ReadAll(result.Body)
 	if err != nil {
